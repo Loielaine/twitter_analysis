@@ -1,0 +1,463 @@
+---
+title: "API - Twitter Data"
+author: "Yixi Li"
+date: "February 25, 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE, warning=FALSE, message=FALSE)
+```
+
+# rtweet
+** Demonstration is adapted from rtweet documentation - https://github.com/mkearney/rtweet **
+
+##Loading rtweet
+First, run this code to install and load the library, rtweet.  
+
+NOTE: You will also need a Twitter account to run this code.
+```{r warning=FALSE, message=FALSE, cache=FALSE}
+if (!requireNamespace("rtweet", quietly = TRUE)) {
+  install.packages("rtweet")
+}
+if (!requireNamespace("httpuv", quietly=TRUE)){
+  install.packages("httpuv")
+}
+
+library(rtweet)
+```
+
+##create token
+
+First, in order to create the token you will have to make an "app" on twitter (apps.twitter.com). Follow the instructions provided to create the app and obtain your Consumer API Key and your consumer API secret.  Paste into the appropriate variables in the code below.
+
+__YOU ONLY NEED TO CREATE THIS TOKEN ONCE - IT IS SAVED TO YOUR COMPUTER AND WILL WORK IN SUBSEQUENT WORKSESSIONS__
+
+```{r eval=FALSE}
+## whatever name you assigned to your created app
+appname <- "YOUR APP NAME HERE"
+
+## api key (example below is not a real key)
+key <- "YOUR KEY HERE"
+
+## api secret (example below is not a real key)
+secret <- "YOUR KEY HERE"
+
+## create token named "twitter_token"
+twitter_token <- create_token(
+  app = appname,
+  consumer_key = key,
+  consumer_secret = secret)
+```
+
+Your token lives in your R environment and the below code should now work.  If it doesn't email Adrianne at abradfor@umd.edu and include error code text.
+
+## search_tweets
+Firstly, we can use the Twitter search API to pull previously tweeted tweets - this function behaves the same as doing a search in the twitter search bar, returns a bunch of variables in a JSON format and then rtweet turns it into a dataframe for us.
+
+In this example, we're searching for tweets that include the hashtag #rstats, and limiting our results to 18,000 maximum - you will likely get fewer results due to rate limiting. The include_rts argument indicates whether or not you want your results to include retweets.  In this example we have set that to FALSE, so we would only get original tweets.  Search_tweets using the standard Twitter API (the free version) will only pull historical tweets within the past week.
+
+As you work through this notebook, if you run each cell in rapid succession you will hit a rate limit.  You can only collect 18,000 tweets per 15 minutes.  If I hit a rate limit I set a timer for 15 minutes and work on something else in the meantime.  I'm going to limit many of these examples to 100 tweets each to avoid hitting rate limits.
+
+```{r cache=TRUE}
+rstats <- search_tweets(
+  "#rstats", n = 18000, include_rts = FALSE
+)
+```
+`r nrow(rstats)` Tweets from the last 6-9 days are collected, lets look at a 10.
+
+```{r}
+head(rstats$text, n=10)
+```
+
+In search_tweets we can use AND to find tweets that contain both #rstats AND the word data, in any position within the text. The space works as an AND search.
+
+```{r}
+rstats2 <- search_tweets(
+  "#rstats data", n = 100, include_rts = FALSE
+)
+```
+Here we find tweets that contain both #rstats and also the word data.
+```{r}
+head(rstats2$text, n=10)
+```
+
+Let's try an OR instead of an AND search. See the twitter search documentation for standard search operators: https://developer.twitter.com/en/docs/tweets/search/guides/standard-operators
+
+```{r}
+rstats3 <- search_tweets(
+  "#rstats OR data", n = 100, include_rts = FALSE
+)
+```
+
+Here we find more variety of tweets as they contain either #rstats or the fairly common word "data."
+```{r}
+head(rstats3$text, n=10)
+```
+
+## Variables in Twitter Data
+Tweets are collected from the API as JSON objects, but the rtweet package automatically converts each JSON into a vector and combines them into a dataframe.
+
+The format of a JSON object looks like this: 
+
+`{"name":"John", "age":31, "city":"New York"}`
+
+You receive a list of name:value pairs.  This is obviously not a tweet JSON, those are rather large as they contain all of the variables listed below, with the corresponding items.  There is one JSON object for each tweet collected.
+
+```{r}
+# LIST VARIABLE NAMES
+colnames(rstats)
+```
+
+## What are retweets?  
+So far we've limited our tweets obtained in our searches to original tweets by utilizing the `include_rts = FALSE` arguement. What are retweets?  Retweets are probably the most common type of tweet on twitter.  Retweets are when users share the tweets of others on their own twitter timeline with attribution.  They look like this:
+
+ ![](C:/Users\Adrianne\Documents\Rworkingdirectory\retweetexample.png) 
+ 
+In this example, the tweet appears on Doug Kammerer's timeline, but it was originally tweeted by Amelia Draper.  If we collected it in our searches it would be from Doug and reflect Amelia in the retweeted part of the JSON object.  Here is a truncated example JSON:
+```
+{
+  "tweet": {
+    "text": "RT @author original message"
+    "user": {
+          "screen_name": "Retweeter"
+    },
+    "retweeted_status": {
+      "text": "original message".
+        "user": {         
+            "screen_name": "OriginalTweeter"
+```
+
+Quote tweets are retweets in which the person doing the retweeting adds additional text.  They appear like this in the twitter webpage:
+![](C:/Users\Adrianne\Documents\Rworkingdirectory\quotetweet.png) 
+
+Here Carla has retweeted Aaron's tweet, plus added her own additional text.  We would get Carla's text in the "text" field and Aaron's text in the "quoted_text" field, like this (again truncated example JSON):
+
+```
+{
+  "text": "My added comments to this Tweet ---> https:\/\/t.co\/LinkToTweet",
+  "user": {
+    "screen_name": "TweetQuoter"
+  },
+  "quoted_status": {
+    "text": "original message",
+    "user": {
+      "screen_name": "OriginalTweeter"
+```
+
+## Using Collected Tweet Data - Tweets over Time
+We can make various plots using this saved data, for example, graphing the number of tweets by timeperiod.
+
+```{r warning=FALSE, message=FALSE}
+if (!requireNamespace("ggplot2", quietly = TRUE)) {
+  install.packages("ggplot2")
+}
+library(ggplot2)
+```
+
+```{r warning=FALSE}
+ts_plot(rstats, "3 hours") +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(plot.title = ggplot2::element_text(face = "bold")) +
+  ggplot2::labs(
+    x = NULL, y = NULL,
+    title = "Frequency of #rstats Twitter statuses from past 9 days",
+    subtitle = "Twitter status (tweet) counts aggregated using three-hour intervals",
+    caption = "\nSource: Data collected from Twitter's REST API via rtweet"
+  ) 
+```
+
+
+## Using Collected Twitter Data - Frequency Table
+Or we can look at a frequency table of the "source" of the tweets - what application a user is using in order to send their tweets.
+```{r}
+if (!requireNamespace("plyr", quietly = TRUE)) {
+  install.packages("plyr")
+}
+library(plyr)
+```
+
+```{r}
+head(arrange(count(rstats, 'source'),desc(freq)))
+```
+
+Here, we see that people who tweet about #rstats are most commonly using a desktop or laptop computer, followed by smartphones.  IFTTT is an automated process service, and TweetDeck is a alternate Twitter application.
+
+## Using Collected Twitter Data - Mapping
+To look at mapping tweets, we can collect only tweets that contain both the word "maryland" and are in the English language.
+```{r warning=FALSE, message=FALSE}
+if (!requireNamespace("maps", quietly = TRUE)) {
+  install.packages("maps")
+}
+library(maps)
+```
+
+```{r warning=FALSE}
+## search for 10,000 tweets in English that contain the word "Maryland"
+us <- search_tweets("lang:en AND maryland", n = 10000)
+```
+
+Mapping these tweets we can see that the majority are in the DMV area.  Note that not all tweets will have geocodes/location information.  Twitter first uses the geocode on the tweet, then if there is no geocode on the tweet itself, will use any location information from the user's profile.
+```{r warning=FALSE, cache=TRUE}
+## create lat/lng variables using all available tweet and profile geo-location data
+us <- lat_lng(us)
+
+## plot state boundaries
+par(mar = c(0, 0, 0, 0))
+maps::map("state", lwd = .25)
+
+## plot lat and lng points onto state map
+with(us, points(lng, lat, pch = 20, cex = .75, col = rgb(0, .3, .7, .75)))
+```
+
+# "Listening" to Twitter
+
+## stream_tweets
+So far we have done our analysis on past tweets through the search API.  For most research applications you will want to "listen" to the twitter stream and obtain a 1% sample of all tweets as they are posted, 1) because you can monitor emerging situations and 2) because with a free account you are limited to searching the last 6-9 days, but you can stream continuously over a period of time to compile a corpus of tweets for analysis.  You will likely obtain more tweets when streaming vs. searching, but streaming API doesn't have as many operators to be used in keywords - search_tweets has options for NOT searches, types of media (containing an image or a periscope). You also cannot exclude retweets easily when streatming.
+
+The most basic is obtaining a random sample, using no filters.  rtweet will default to listenting for 30 seconds unless otherwise specified.
+```{r cache=FALSE}
+st <- stream_tweets("")
+```
+
+## What do the tweets say?
+```{r cache=FALSE}
+#PRINT TEXT OF LAST 10 TWEETS IN TABLE
+tail(st["text"], n=10)
+```
+Some of what you receive in the text might look like gibberish.  Values like "U+3044" indicate special characters designated by uncode.  The t.co links are the links to the quoted tweet or the tweet that is being retweeted.  The text of those tweets are also in that row of the data frame in the columns quoted_text or retweet_text.  This data would need cleaning before performing text analysis.
+
+##Filtering the Stream
+You can also listen for specific filter items (search terms).  
+
+Here we'll listen for tweets about Donald Trump or Roger Stone. The timeout argument is in seconds.  To easily listen for 5 minutes, we'll use 60*5.  The comma serves as an "OR" search.  This will not find tweets that call Donald Trump "Trump" or "Pres. Trump," it requires both Donald AND Trump.
+
+```{r}
+djt <- stream_tweets(
+  "donald trump, roger stone", ## donald trump OR roger stone
+  timeout = 60*5  ## 5 minutes
+)
+```
+
+## What do our Donald Trump OR Roger Stone tweets say?
+```{r}
+#PRINT TEXT OF FIRST 10 TWEETS IN TABLE
+head(djt$text, n=10)
+```
+Remember this is ~1% of all tweets about Donald Trump or Roger Stone within a 5 minute period.
+
+Note that it includes tweets about Donald Trump OR Roger Stone.  The comma in the keyword string serves as an OR search.
+
+FROM THE TWITTER API DOCUMENTATION:
+"A comma-separated list of phrases which will be used to determine what Tweets will be delivered on the stream. A phrase may be one or more terms separated by spaces, and a phrase will match if all of the terms in the phrase are present in the Tweet, regardless of order and ignoring case. By this model, you can think of commas as logical ORs, while spaces are equivalent to logical ANDs (e.g. 'the twitter' is the AND twitter, and 'the,twitter' is the OR twitter)."
+Standard stream parameters available at https://developer.twitter.com/en/docs/tweets/filter-realtime/guides/basic-stream-parameters.html.  Scroll down to the section titled "track."
+
+Instead, we want to get tweets that include both Donald Trump AND Roger Stone and allow for not including first names.  This time we'll save the tweets in raw JSON format inside your working directory.  Afterwards we'll parse the JSON file using a different function, parse_stream, to convert to a data frame.
+
+```{r}
+stream_tweets(
+  "trump stone", #trump and stone
+  timeout = 60*3, # 3 minutes
+  parse=FALSE,#parse= FALSE to save as raw JSON
+  file_name = "tweets") 
+```
+```{r}
+djt_rs <- parse_stream("tweets.json")
+```
+
+## What do our Trump AND Stone tweets say?
+There are fewer tweets containing Trump AND Stone.  Again a 1% sample of the universe of tweets in a short period.
+```{r}
+#PRINT TEXT OF FIRST 10 TWEETS
+head(djt_rs$text, n=10)
+```
+Note 2 things - 1) The search terms could be contained in quoted tweet not necessarily in the message added by the user who quoted or retweeted, 2) some of the tweets appear to be truncated.  Only RTs or tweets with embedded quoted tweets should be truncated, and the quoted tweets or tweets that are being retweeted are included in the variables quoted_text and retweet_text, so all text is included.
+
+```{r}
+print("TWEET TEXT")
+head(djt_rs$text, n=5)
+print("RETWEET TEXT")
+head(djt_rs$retweet_text, n=5)
+print("QUOTE TWEET TEXT")
+head(djt_rs$quoted_text, n=5)
+```
+
+##Listening Over Time
+Here is example code for the listening you will be doing for your project.  In the "q" variable you will list your keywords for your searches, using spaces for AND and commas for OR.
+
+IMPORTANT: If you're going to leave your computer on to run this over time, make sure to set your power and sleep settings so that the PC will not go to sleep.  If it does, your code will stop and you will lose data and have to restart it.
+```{r eval=FALSE}
+## Stream keywords used to filter tweets
+q <- "hillaryclinton, hillary clinton, imwithher,realdonaldtrump,maga,electionday"  
+## Put your selected filter terms here ^^^^,separated by commas.  
+## The commas serve as an OR search. Spaces, as in "hillary clinton" serve as an AND search 
+## where both items need to appear in the same tweet, but not necessarily next to each other.
+## NOTE - hillaryclinton and hillary clinton do not return the same results.
+
+## Stream time in seconds so for one minute set timeout = 60
+## For larger chunks of time, I recommend multiplying 60 by the number
+## of desired minutes. This method scales up to hours as well
+## (x * 60 = x mins, x * 60 * 60 = x hours)
+
+oneday <- 60L * 60L * 24L  
+
+## Monitor your progress, you may have to restart your code if the internet blips or
+## if your computer restarts.  By not parsing and saving the raw JSON, you should hopefully not lose any data.
+
+stream_tweets(
+  q,
+  parse = FALSE,
+  timeout = oneday,
+  file_name = "tweets1")
+stream_tweets(
+  q,
+  parse = FALSE,
+  timeout = oneday,
+  file_name = "tweets2")
+```
+
+##Parsing JSONS and appending dataframes
+```{r eval=FALSE}
+## Parse from json file to get a usable dataframe
+tweets1 <- parse_stream("tweets1.json") #replace tweets1 with the name of the json file
+tweets2 <- parse_stream("tweets2.json") #check your folder and see how many stream files you have, parse each into a separate dataframe, then bind using the code below, adding each df name to the rbind function
+all_tweets <- rbind(tweets1, tweets2)
+```
+
+## Monitor Your Output
+You may want to use a series of shorter listening times (such as 1 day) and at the end of each day inspect the tweets you've received for trends so that you can add any emerging hashtags to your filter terms.
+
+## Very Basic Text Mining - Bag of Words
+To see what popular terms are in your collected tweets, we'll use a text mining package, qdap, to look at frequent terms.  For this example I'm using the Donald Trump tweets from before.  Qdap will require you to have Java installed on your computer matching (32-bit vs. 64-bit) your version of R. If you get an error when loading qdap, Get the right version of Java at https://www.java.com/en/download/manual.jsp.
+
+```{r warning=FALSE, results='hide', message=FALSE}
+if (!requireNamespace("qdap", quietly = TRUE)) {
+  install.packages("qdap")
+}
+library(qdap)
+```
+
+## The Bag of Trump Words
+```{r}
+frequent_terms <- freq_terms(djt["text"], 30)
+plot(frequent_terms)
+```
+
+Some of the words are expected, we streamed for tweets about Trump - so Donald and Trump are likely to be in the top words.  This was part of our OR search in which we also included Roger Stone.  He doesn't appear here, likely because he has fallen out of the news by the time I reran this.  Note, that this is counting the number of times these words appear, not the number of tweets in which these words appear.  If "Trump" is in one tweet 3 times, it adds 3 instances of "Trump" to the totals reflected above.
+
+We also get words that don't mean much to us, like the, to, a, etc.  These are typically called stopwords. Let's remove these.
+```{r}
+bagdjt <- djt$text %>% iconv("latin1", "ASCII", sub="") %>% scrubber() %sw% qdapDictionaries::Top200Words
+```
+
+And now look at the frequent terms again.
+```{r}
+frequent_terms <- freq_terms(bagdjt, 30)
+plot(frequent_terms)
+```
+
+Epstein is one of the frequent words appearing, but I'm not sure who/what that is.  If I decided that I wanted to see all the tweets regarding "epstein" to further analyze those, I could create a dataframe that just includes these tweets.
+```{r warning=FALSE, message=FALSE}
+if (!requireNamespace("dplyr", quietly = TRUE)) {
+  install.packages("dplyr")
+}
+if (!requireNamespace("stringr", quietly = TRUE)) {
+  install.packages("stringr")
+}
+library(dplyr)
+library(stringr)
+```
+```{r}
+djt_epstein <- djt%>%filter(str_detect(str_to_lower(text), "epstein") == TRUE)
+head(djt_epstein$text, n=10)
+```
+
+Apparently Jeffrey Epstein is an alleged pedophile and/or sex trafficker who is associated with Trump.  Potentially these tweets would have different sentiment/content than other Donald Trump tweets about other subjects, such as the ones that reference Sarah Sanders, who also appears on the frequent terms.
+
+```{r}
+djt_sanders <- djt%>%filter(str_detect(str_to_lower(text), "sanders") == TRUE)
+head(djt_sanders$text, n=10)
+```
+
+There are `r nrow(djt_sanders)` tweets containing "Sanders" and `r nrow(djt_sanders[djt_sanders$is_retweet == TRUE,])` of them are retweets which is why most appear to say the same thing
+
+```{r}
+nrow(djt_sanders)
+nrow(djt_sanders[djt_sanders$is_retweet == TRUE,])
+```
+
+##BONUS CONTENT: EMOJI
+We can have some fun and look at the most popular emoji included in our collected tweets.  We'll use the emoji dictionary compiled by Kate Lyons built on the work of Jessica Peterka-Bonetta (available at https://github.com/lyons7/emojidictionary/blob/master/emoji_dictionary.csv) to aid with the translation from UTF-8 to emoticon.
+
+```{r}
+## Read in emoticon dictionary
+emoticons <- read.csv("emoji_dictionary.csv", header = T, stringsAsFactors = FALSE)
+```
+
+I'm going to define two helper functions to do the find/replace and the counting of emoji in a corpus and a function `emojiWrapper` that wraps these functions together into one function call.  You do not have to worry about understanding how these functions work.
+```{r}
+## This function derived from nonfuctional DataCombine package - https://github.com/cran/DataCombine
+FindReplace <- function(data, replaceData, from = 'from', to = 'to'){
+  if (!(class(data) %in% c('character', 'factor'))) {
+    stop(paste(Var, 'is not a character string or factor. Please convert to a character string or factor and then rerun.'),
+         call. = FALSE)
+  }
+  ReplaceNRows <- nrow(replaceData)
+
+  for (i in 1:ReplaceNRows) {
+    data <- gsub(pattern = replaceData[i, from],
+                        replacement = replaceData[i, to], data)
+    }
+  return(data)
+}
+```
+
+```{r}
+CountEmoji <- function(data, emoticons){
+  numemoji <- nrow(emoticons)
+  emojicount <- data.frame(name=character(),count=integer(), stringsAsFactors = FALSE)
+   if (!(class(data) %in% c('character', 'factor'))) {
+    stop(paste(Var, 'is not a character string or factor. Please convert to a character string or factor and then rerun.'),
+         call. = FALSE)
+  }
+  for (i in 1:numemoji){
+      currcount <- sum(str_count(data, emoticons[i,"Name"]))
+      if (currcount > 0){
+        name <-emoticons[i,"Name"]
+        count <-currcount
+        row <- cbind(name,count)
+        emojicount <- rbind(emojicount,row)
+      }
+  }
+  final <- data.frame(name=as.character(emojicount$name),count=as.numeric(as.character(emojicount$count)), stringsAsFactors = FALSE)
+  return(final[rev(order(final$count)),])
+}
+```
+
+
+```{r}
+emojiWrapper <- function(data){
+  if (!(class(data) %in% c('character', 'factor'))) {
+    stop(paste(Var, 'is not a character string or factor. Please convert to a character string or factor and then rerun.'),
+         call. = FALSE)
+  }
+  data <- data %>% iconv(from = "latin1", to = "ascii", sub = "byte") %>% FindReplace(replaceData = emoticons, from = "R_Encoding", to = "Name") %>% CountEmoji(emoticons)
+  return(data)
+}
+```
+
+
+Now we can use the function `emojiWrapper` to find all the instances of each emoji in a vector of text.  It returns a dataframe with just the emoji present in the vector of text and the number of times the emoji occurs.  
+
+```{r}
+counted_djt <- emojiWrapper(djt$text)
+head(counted_djt)
+```
+
+```{r}
+counted_rstats <- emojiWrapper(rstats$text)
+head(counted_rstats)
+```
+
+
