@@ -1,0 +1,350 @@
+---
+title: "Automation and Bot Acitivities about Hong Kong Topics on Twitter"
+author: "Ruixuan LI, Yixi LI"
+date: "12/2/2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE,tidy = FALSE, fig.align = "center")
+library(readr)
+library(ggplot2)
+library(ggthemes)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(stringr)
+library(scales)
+data<-read_csv('/Users/Loielaine/Not Sync/data_all.csv')
+data$date<-as.Date(data$created_at)
+data<- data%>%
+ filter((text!=''))
+botscore <-read_delim('/Users/Loielaine/Desktop/umich-2019/SURV727/project/data/botscore_all.csv',',')
+keywords <-read_delim('/Users/Loielaine/Desktop/umich-2019/SURV727/project/data/keyword_freq.csv',',')[,2:3]
+set.seed(1004)
+sentiment_group <- read_delim('/Users/Loielaine/Not Sync/sentiment_group.csv',',')
+```
+
+# 1 Introduction
+
+## 1.1 Background
+
+In 2019, in order to against the Extradition Law Amendment Bill proposed by Hong Kong government, protests were launched in May, 2019. The amendment bill was first proposed in response to the murder of Poon Hiu-wing conducted by her boyfriend Chan Tong-kai during their travel in Taiwan. Since there is no extradition treaty between Taiwan and Hong Kong, the murderer cannot be sentenced in Hong Kong with his crime. If the amendment bill enacted, the local authorities will have the power to detain and extradite criminal fugitives wanted by the territories that Hong Kong currently does not have extracdition agreements with. Hong Kong residents are concerned about such bill would potentially hurt the region's autonomy and citizens' liberities, so several protests were conducted to express their will that the government should cease the process and withdrawl the bill.
+
+The government reacted passively to the protests and as time going by, the protests escalated to a series of radical activities. On 16 June, 2019, a large number of Hong Kong citizens attended the march, however, the exact number of participants were claimed differenly across media sources and government. Then, the protesters besieged and blocked government buildings multiple times in late June. The Hong Kong international airport canceled numerous flights due to protesters' three days sit-in began at August 12 to 14. In November, several confrontation between protesters and police happened in several colleges and led to multiple injuries. 
+
+The Hong Kong protests gained international attention in 2019. The google trends shows that the number of searching 'Hong Kong protest' increased rapidly in 2019. While these topics initated wide discussion on Twitter, where there be automatically generated tweets to fulfill specific goals? Bolsover, G., & Howard, P. (2018)'s study about automation, algorithms and the manipulation of information about Chinese politics on Twitter and Weibo shows automated bot activites on Twitter. Are bots still active on Twitter dispersing Hong Kong related information now? 
+
+# 2 Methods
+
+## 2.1 Data Collection
+The data was collected through the Twitter API with streaming hashtags including the related location, characters, and events of the Hong Kong Protest. The hashtags we used are listed in the following table. 
+
+```{r echo=FALSE, fig.cap="The hashtags used for data collection on Twitter",out.width = '70%'}
+include_graphics("/Users/Loielaine/Desktop/umich-2019/SURV727/project/image/hashtags.png")
+```
+We collected data from 11/11/2019 to 11/15/2019, during which there were strikes and shotting events in Hong Kong and heated discussion worldwide. We collected over 1.5 million pieces of tweets in total. The data includes dates, text, language, user name, etc.
+
+## 2.2 Bot Detection
+We used Botometer to obtain bot probabilites for users. It is a tool using machine learning algorithm trained to classify an account as bot or human based on tens of thousands of labeled examples. To scrape these information from Botometer(https://botometer.iuni.iu.edu/#!/), dynamic web scraping technique was used. We used python package 'Selenium' to imitate web driver actions and retrieve data from the website. The python code is included in Appendix 2.
+
+
+# 3 Result
+
+## 3.1 Content Analysis
+### 3.1.1 Top keywords
+To obtain general knowledge of tweets' content, we analyzed the top keywords of tweets text. The results are described in the following chart. The top keywords are 'police', 'hongkong', and 'hongkongprotest', which are related to the intense discussion about conflicts between police and protestors. Keywords such as 'standwithhongkong'  and 'standwithhk' obviously show their attitudes to support the protestors, while keywords such as 'gas', 'violence', 'tear', and 'shot' are related to their accuse to the Hong Kong police. Keywords such as 'democracy', 'human rights' and 'freedom' are also frequently mentioned as their key demands and slogan of the protest.
+```{r,echo = TRUE,fig.cap="Top keywords",fig.width=5, fig.height=3}
+ggplot(keywords, aes(x = reorder(WORD, FREQ), y = FREQ)) + 
+  geom_bar(stat = 'identity') + 
+  coord_flip() + 
+  ylab('Key Word') +
+  xlab('Frequency')
+```
+
+
+### 3.1.2 Top emojis
+Hong Kong Protest has received worldwide attention and there are Tweets of multiple languages, including English, Chinese, Japanese, Franch, Korean, Tagalog, Spanish, Germany, Thai, etc. It's hard to analyze across all languages, however, emojis are widely used and could be a useful resource to understand the contents regardless of languages.
+
+```{r,echo = TRUE}
+data %>% 
+  group_by(lang) %>%
+  summarise(count=n())%>% 
+  arrange(desc(count))%>% 
+  head(10)%>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+We used the emoji dictionary compiled by Kate Lyons built on the work of Jessica Peterka-Bonetta (available at https://github.com/lyons7/emojidictionary/blob/master/emoji_dictionary.csv) to aid with the translation from UTF-8 to emotion. The following functions are developed to operate finding or replacement, counting of emoji in a corpus and wrap those into `emojiWrapper` (See Appendix 3).
+
+The results of the top emoji are described in the following table. As it is illustrated in the table, most of the emojis are related to the violence in Hong Kong, such as warning sign, ambulance, skull and crossbones, fire, chain, etc.
+
+```{r echo=FALSE, fig.cap="Top emoji", out.width = '30%'}
+include_graphics("/Users/Loielaine/Desktop/umich-2019/SURV727/project/image/emoji.png")
+```
+
+
+## 3.2 Bot Detection
+
+### 3.2.1 Canceled Accounts
+In order to detect potential automated Twitter accounts, known as 'bot', we filtered out `r length(botscore$user_id)` users that has tweeted or retweeted more than 30 tweets from November 11st to November 15th and passed them into Botometer to get automation metrics.
+
+If the twitter accounts are no longer exist (either canceled by user or twitter) or the timeline is locked by users, Botometer cannot run the detection algorithm. Among all these users, there are 796 users that we cannot get any information from. Interestingly, there are 555 accounts been canceled after we collected the tweets which is 6.3% of all users who tweets over 30 times in 5 days. The following table shows the frequency of each status. Note that the 'Normal user' in status only refers to the accessbility of twitter timeline of the specific user, and does not guarantee non-bots.
+
+```{r,echo = FALSE}
+tb <-as.data.frame(t(table(botscore$status)))
+tb <- tb[, 2:3]
+tb$Proportion <- format(round(tb$Freq/8754, 4), nsmall = 4)
+colnames(tb) <- c('Status', 'Frequency', 'Proportion')
+tb %>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+
+```{r,echo = FALSE}
+botscore$hk_name <- str_detect(botscore$user_id, regex('(.*hon.*kon.*)|(.*hk.*)', 
+                                                       ignore_case = TRUE))
+canceled <- botscore[botscore$status=='Account canceled', c('user_id', 'hk_name')]
+
+pattern_canceled <- canceled[canceled$hk_name,]
+pattern_active <- botscore[botscore$hk_name & botscore$status == 'Normal user', ]
+
+```
+
+By looking at the user name of these 555 canceled accounts, we found that there exist numerous accounts have 'hongkong' plus several numbers or letters in the name. By filtering user id with pattern like 'hon.kon', 'hk', we found that there are 97 users are using Hong Kong related elements in their account names, which is 17.4% of all the canceled accounts. For the active accounts, there are 910 accounts have such pattern, which is 11.4% of all active users. The example of user names having this pattern are as follows: `r pattern_canceled$user_id[sample(10)]`.
+
+```{r,echo = TRUE,fig.cap="Name pattern for users of different status",fig.width=5,fig.height=3}
+botscore %>% 
+  group_by(status) %>% 
+  mutate(hk_name = ifelse(hk_name, 'With hk pattern', 'without pattern')) %>% 
+  filter(status!='Only retweets') %>% 
+  summarise(with_pattern = sum(hk_name == 'With hk pattern'), 
+            without_pattern = sum(hk_name == 'without pattern')) %>% 
+  gather(key = 'cat', value = 'count', 
+         with_pattern, without_pattern) %>% 
+  ggplot() +
+  geom_bar(aes(x=status, y = count, fill = cat),
+           position = 'fill', 
+           stat = 'identity', 
+           width = 0.5) +ylab('Percentage')
+```
+
+
+### 3.2.2 Potential bots
+
+The Botometer returns a metrics of automation indicators including the complete automation probabilities. The following graph shows the distribution of the complete automation probability across 7958 users. We classify twitter accounts that have complete automation probability higher than 75% as potential bots. 911 out of 7958 accounts are potentially bots generating automation created tweets, which make 11.44% of the active users.
+
+```{r,echo = FALSE}
+
+prob_high <- botscore %>% 
+  filter(!is.na(prob), prob>0.75)
+prob_high_pattern <- prob_high[prob_high$hk_name,]
+
+```
+
+```{r, echo=TRUE,fig.cap="Distribution of complete automated probability",fig.width=5,fig.height=3}
+botscore %>% 
+  filter(!is.na(prob)) %>% 
+  ggplot(aes(x = prob)) + 
+    geom_histogram(aes(y=..density..), fill='grey', binwidth = 0.05) +
+    geom_density(aes(y=..density..), alpha=.2, fill = '#0D0E0E', color=NA)+
+    labs(y = 'density', x='Complete automated probability')+
+    geom_vline(aes(xintercept=0.75),   # Ignore NA values for mean
+               color="#ff4d4d", linetype="dashed", size=1)
+```
+
+
+For the user name in this accounts, instead of 'HongKong' like user name, most of them consist a human-like name and a series of numbers, which fits the norm of bots name generating. The example names of these bots are presented as follows. Example of bots' names: `r prob_high$user_id[sample(5)]`. From the plot below, when the probablity of being a automated bot get higher, they tend not to use 'HongKong' like name in their account id.
+
+```{r, echo=TRUE, fig.cap="Name pattern of different type of users",fig.width=5,fig.height=3}
+botscore %>% 
+  mutate(bot = ifelse(is.na(prob), 'Account canceled user', 
+                      ifelse(prob < 0.5, 'normal user', 
+                             ifelse(prob > 0.8, 'prob>0.8', 'prob>0.5')))) %>%
+  group_by(bot) %>% 
+  summarise(with_pattern = sum(hk_name == TRUE), 
+            without_pattern = sum(hk_name == FALSE)) %>% 
+  gather(key = 'cat', value = 'count', 
+         with_pattern, without_pattern) %>% 
+  ggplot() +
+  geom_bar(aes(x=bot, y = count, fill = cat),
+           position = 'fill', 
+           stat = 'identity', 
+           width = 0.5) +ylab('Percentage')
+```
+
+
+## 3.3 Sentiment Analysis
+To get further knowledge of the overall mood of the tweets, we analyzed the sentiment based on the dictionary of words. To be specific, words in Tweets' text are looked up in the Lexicoder Sentiment Dictionary and classified as 'positive', 'negative' and 'neutral'. Due to the time limit, we only analyzed Tweets in English. The sentiment score is calculated by ${\displaystyle  \frac{positive-negative}{total}}$, which indicates that if the score is above zero, the overall sentiment would be positive, and if the score is below zero, the overall sentiment would be negative, and if the score equals zero, the overall sentiment would be neutral. The function we used is included in Appendix 4.
+
+As can be seen from the following density plot, the distribution of sentiment scores is highly right-skewed, which indicates there are more negative tweets than positive ones. There is also a peak for neutral sentiment, while two peaks for negative sentiment.
+```{r,echo = TRUE,fig.cap="Density plots of sentiment scores of different users",fig.width=5,fig.height=3}
+ggplot(sentiment_group, aes(x=LC,group=group)) + 
+    geom_density(aes(fill=group),alpha=.3)+
+  theme(text = element_text(size=10))+ 
+  ggtitle("Density plots of sentiment scores of different users") +
+  ylab("Density")
+```
+ 
+Based on the bot detection results, we further compared the sentiments of different types of users detected by Botometer. In general, we found over 55% of the tweets are negative, 25.5% are neutral while only 19% are positive. For users with bot probability larger than 0.8, the negative tweets proportion is about 57.8%, while for normal users this number is 54.4%. users with bot probability larger than 0.8, the neutral tweets proportion is only 22%,which is much lower than normal users (27.2%). 
+```{r,echo = FALSE}
+st_count<-
+sentiment_group %>%
+  filter(is.na(GIsent)==FALSE) %>%
+  count(GIsent,group) %>%
+  group_by(group) %>%
+  mutate(proportion = n / sum(n))
+st_count%>% 
+  kable() %>% 
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+The following chart shows vividly about the difference, users with robot probability larger than 0.8 have the largest proportion of negative tweets, while users with robot probability larger than 0.5 ranks next. Normal users and account canceled users tend to have more neutral tweets compared with robot users. This result indicates that there exist automated bots on Twitter generating negative tweets on Hong Kong related topics and trying to flood social media with negative opinions.   
+
+```{r,echo = TRUE,fig.cap="Sentiment of different users",fig.width=5,fig.height=3}
+st_group_count<-
+sentiment_group %>%
+  filter(is.na(GIsent)==FALSE) %>%
+  group_by(group,GIsent) %>%
+  summarise(GIsent_count = n())
+
+ggplot(st_group_count, aes(x = group, y = GIsent_count, fill = GIsent)) +
+  geom_col(position = "stack",width = 0.8) +
+  theme(text = element_text(size=10))+ 
+  ggtitle("Sentiment of different users") +
+  xlab("User type") + ylab("Count") + theme(axis.text.x=element_text(size=9))
+```
+\pagebreak
+# Conclusion
+Based on the general analysis of contents and emoji, we found an intense mention of the conflict between police and protestors and slogans for supporting Hong Kong protests. Not surprisingly, over 55% of the tweets are expressing negative sentiment, 25.5% have neutral sentiment while only 19% are positive.  
+
+From the result of our analysis, there is no doubt that automated bots are still active on Twitter, spreding out information. Among all the users tweeted more than 30 times in 5 days, there are 6.3% of them canceled their account either initiatively or passively. By looking at the canceled accounts' user id, we found that 17.4% of them have 'HongKong' like words in their user's name. And these type of accounts makes 11.4% of the active users. It is clear that numerous accounts are registered in order to give speeches related to Hong Kong protests on Twitter, and we believe they are created by people who are desperately working on dispersing Hong Kong related information. For the accounts still active, there are about 11% of them have high possibility being automated bots. Surprisingly, the accounts have high probability being bots tend to have lower proportion of having 'HongKong' in their name, while they have more human-like account name as 'Tommy37134063', human name plus numbers. We believe these accounts are more likely to be generated by algorithm or program from some organizations since it requires more cost and technology.
+
+Sentiment analysis further indicated that automated bots had more negative tweets than normal users. Users with robot probability larger than 0.8 have the largest proportion of negative tweets, while users with robot probability larger than 0.5 ranks next. This result indicates that there exist automated bots on Twitter generating negative tweets on Hong Kong related topics and trying to flood social media with negative opinions.   
+
+\pagebreak
+# Appendix
+## 1. Codes for collecting data from Twitter API
+```{r, echo=TRUE,eval=FALSE}
+twitter_token <- create_token(app = appname,
+  consumer_key = key,consumer_secret = secret)
+oneday <- 60L * 60L * 24L
+keywords <- "#HongKongProtests, #AntiChina HongKong, #AntiChina Hong Kong, 
+#HongKong, Hong Kong police, Hong Kong XiJingping, Hong Kong Protestors, 
+Hong Kong strike, Hong Kong demonstration, Hong Kong rebellion, 
+Hong Kong human rights, Hong Kong independence"
+stream_tweets(keywords,parse = FALSE,
+  timeout = oneday*1,file.rename = "tweets_hk")
+```
+
+## 2. Codes for robot detection
+```{python, echo = TRUE, eval=FALSE}
+def get_data_text(self, user_id):
+    scores = self.find_elements_by_class_name('category-row')
+    data = {'user_id': user_id}
+    for i in scores:
+        temp = i.text.split(': ')
+        data[temp[0]] = temp[1]
+    data = pd.DataFrame([data])
+    return data
+def load_data(driver, user_id):
+    driver.refresh()
+    element = driver.find_element_by_id("inputSN")
+    element.send_keys(user_id)
+    check = driver.find_element_by_xpath('//*[contains(concat( " ", @class, " " ), 
+    concat( " ", "btn-default", " " ))]')
+    check.click()
+    for sec in range(8):
+        process = (sec+1)*100/8
+        time.sleep(1)
+    result_button = driver.find_element_by_xpath('//*[contains(concat( " ",\
+    @class, " " ), concat( " ", "panel-body", " " ))]')
+    result_button.click()
+    data = get_data_text(driver, user_id)
+    temp_list = driver.find_elements_by_class_name('ng-binding')
+    error_message = temp_list[3].text
+    data['error'] = error_message
+    return data
+def main(driver, user_list):
+    data = pd.DataFrame([])
+    failed_user = []
+    n = len(user_list)
+    count = 1
+    print ('Total number of names: ' + str(n))
+    for user_id in user_list:
+        print('Processing: '+ str(count), end = '\r')
+        try:
+            data_line = load_data(driver, user_id)
+            data = pd.concat([data, data_line], sort=FALSE)
+        except:
+            failed_user.append(user_id)
+        count += 1
+    result = {'data': data, 'failed list': failed_user}
+    return result
+```
+
+## 3. Codes for emoji analysis
+```{r,echo = FALSE}
+## Read in emoticon dictionary
+emoticons <- read.csv("/Users/Loielaine/Desktop/umich-2019/SURV727/project/data/emoji_dictionary.csv", header = T, stringsAsFactors = FALSE)
+```
+
+```{r, echo = TRUE,eval=FALSE}
+FindReplace <- function(data, replaceData, from = 'from', to = 'to'){
+  if (!(class(data) %in% c('character', 'factor'))) {
+    stop(paste(Var, 'is not a character string or factor. \
+               Please convert to a character string or factor and then rerun.'),
+         call. = FALSE)}
+  ReplaceNRows <- nrow(replaceData)
+  for (i in 1:ReplaceNRows) {
+    data <- gsub(pattern = replaceData[i, from],
+                        replacement = replaceData[i, to], data)}
+  return(data)}
+CountEmoji <- function(data, emoticons){
+  numemoji <- nrow(emoticons)
+  emojicount <- data.frame(name=character(),count=integer(), stringsAsFactors = FALSE)
+   if (!(class(data) %in% c('character', 'factor'))) {
+    stop(paste(Var, 'is not a character string or factor. \
+               Please convert to a character string or factor and then rerun.'),
+         call. = FALSE)}
+  for (i in 1:numemoji){
+      currcount <- sum(str_count(data, emoticons[i,"Name"]))
+      if (currcount > 0){
+        name <-emoticons[i,"Name"]
+        count <-currcount
+        row <- cbind(name,count)
+        emojicount <- rbind(emojicount,row)}}
+  final <- data.frame(name=as.character(emojicount$name),
+                      count=as.numeric(as.character(emojicount$count)), 
+                      stringsAsFactors = FALSE)
+  return(final[rev(order(final$count)),])}
+emojiWrapper <- function(data){
+  if (!(class(data) %in% c('character', 'factor'))) {
+    stop(paste(Var, 'is not a character string or factor.\
+               Please convert to a character string or factor and then rerun.'),
+         call. = FALSE)}
+  data <- data %>% iconv(from = "latin1", to = "ascii", sub = "byte") %>%  
+    FindReplace(replaceData = emoticons, from = "R_Encoding", to = "Name") %>% 
+    CountEmoji(emoticons) 
+  return(data)}
+```
+
+## 4. Codes for sentiment analysis
+```{r,echo = TRUE}
+SentimentAnalyze<-function(dt){
+sentiments <- analyzeSentiment(as.character(dt$text))
+tokenized <- tokens_lookup(tokens(as.character(dt$text)), 
+                           dictionary=data_dictionary_LSD2015, 
+                           exclusive=FALSE) 
+sentiments$LCpos <- sapply(tokenized,function(x){
+  sum(x=='POSITIVE')-sum(x=='NEG_POSITIVE')+sum(x=='NEG_NEGATIVE')})
+sentiments$LCneg <- sapply(tokenized, function(x){
+  sum(x=='NEGATIVE') - sum(x=='NEG_NEGATIVE') +sum(x=='NEG_POSITIVE')})
+sentiments$LC <- (sentiments$LCpos-sentiments$LCneg)/sentiments$WordCount
+dt$LC<-sentiments$LC
+dt$GIsent = ifelse(sentiments$LC==0, 'neutral', 
+                   ifelse(sentiments$LC>0, 'positive', 'negative')) 
+return(dt)}
+```
+ 
